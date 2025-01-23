@@ -2,53 +2,59 @@ use crate::{
     decimal::PositiveDecimal,
     types::{ClientId, TxnEvent, TxnEventDetail, TxnId},
 };
+use dashmap::DashMap;
+use itertools::Itertools;
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde::{Serialize, Serializer};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use tracing::debug;
 
-pub trait AccStore {
-    fn deposit(&mut self, client_id: ClientId, txn_id: TxnId, amount: PositiveDecimal);
+/// Async Account store.
+/// Switching to async in anticipation of realistic implementations that persist/lookup externally.
+#[async_trait::async_trait]
+pub trait AccStore: Send + Sync {
+    async fn deposit(&self, client_id: ClientId, txn_id: TxnId, amount: PositiveDecimal);
 
-    fn withdraw(&mut self, client_id: ClientId, txn_id: TxnId, amount: PositiveDecimal);
+    async fn withdraw(&self, client_id: ClientId, txn_id: TxnId, amount: PositiveDecimal);
 
-    fn dispute(&mut self, client_id: ClientId, txn_id: TxnId);
+    async fn dispute(&self, client_id: ClientId, txn_id: TxnId);
 
-    fn resolve(&mut self, client_id: ClientId, txn_id: TxnId);
+    async fn resolve(&self, client_id: ClientId, txn_id: TxnId);
 
-    fn chargeback(&mut self, client_id: ClientId, txn_id: TxnId);
+    async fn chargeback(&self, client_id: ClientId, txn_id: TxnId);
 
-    fn snapshots(&self) -> Vec<ClientAccountSnapshot>;
+    async fn snapshots(&self) -> Vec<ClientAccountSnapshot>;
 
-    fn add_event(&mut self, event: TxnEvent) {
+    async fn add_event(&self, event: TxnEvent) {
         match event.detail {
             TxnEventDetail::Deposit { amount } => {
-                self.deposit(event.client_id, event.txn_id, amount)
+                self.deposit(event.client_id, event.txn_id, amount).await
             }
 
             TxnEventDetail::Withdrawal { amount } => {
-                self.withdraw(event.client_id, event.txn_id, amount)
+                self.withdraw(event.client_id, event.txn_id, amount).await
             }
 
-            TxnEventDetail::Dispute => self.dispute(event.client_id, event.txn_id),
+            TxnEventDetail::Dispute => self.dispute(event.client_id, event.txn_id).await,
 
-            TxnEventDetail::Resolve => self.resolve(event.client_id, event.txn_id),
+            TxnEventDetail::Resolve => self.resolve(event.client_id, event.txn_id).await,
 
-            TxnEventDetail::Chargeback => self.chargeback(event.client_id, event.txn_id),
+            TxnEventDetail::Chargeback => self.chargeback(event.client_id, event.txn_id).await,
         }
     }
 }
 
 #[derive(Default)]
 pub struct InMemoryAccStore {
-    accs: BTreeMap<ClientId, Account>,
+    accs: DashMap<ClientId, Account>,
 }
 
+#[async_trait::async_trait]
 impl AccStore for InMemoryAccStore {
     /// Deposits into the account, allowed even if locked.
     /// Note: repeats of the same client/tx will overwrite!
-    fn deposit(&mut self, client_id: ClientId, txn_id: TxnId, amount: PositiveDecimal) {
-        let acc = self.accs.entry(client_id).or_default();
+    async fn deposit(&self, client_id: ClientId, txn_id: TxnId, amount: PositiveDecimal) {
+        let mut acc = self.accs.entry(client_id).or_default();
         acc.txns.insert(
             txn_id,
             Txn {
@@ -61,7 +67,7 @@ impl AccStore for InMemoryAccStore {
 
     /// Withdrawals from account, disallowed for locked account.
     /// Note: repeats of the same client/tx will overwrite!
-    fn withdraw(&mut self, client_id: ClientId, txn_id: TxnId, amount: PositiveDecimal) {
+    async fn withdraw(&self, client_id: ClientId, txn_id: TxnId, amount: PositiveDecimal) {
         self.accs.entry(client_id).and_modify(|acc| {
             if !acc.snapshot.locked {
                 if acc.snapshot.available >= *amount {
@@ -82,7 +88,7 @@ impl AccStore for InMemoryAccStore {
         });
     }
 
-    fn dispute(&mut self, client_id: ClientId, txn_id: TxnId) {
+    async fn dispute(&self, client_id: ClientId, txn_id: TxnId) {
         self.accs.entry(client_id).and_modify(|acc| {
             if !acc.snapshot.locked {
                 if let Some(txn) = acc.txns.remove(&txn_id) {
@@ -99,7 +105,7 @@ impl AccStore for InMemoryAccStore {
         });
     }
 
-    fn resolve(&mut self, client_id: ClientId, txn_id: TxnId) {
+    async fn resolve(&self, client_id: ClientId, txn_id: TxnId) {
         self.accs.entry(client_id).and_modify(|acc| {
             if !acc.snapshot.locked {
                 if let Some(txn) = acc.held_txns.remove(&txn_id) {
@@ -116,7 +122,7 @@ impl AccStore for InMemoryAccStore {
         });
     }
 
-    fn chargeback(&mut self, client_id: ClientId, txn_id: TxnId) {
+    async fn chargeback(&self, client_id: ClientId, txn_id: TxnId) {
         self.accs.entry(client_id).and_modify(|acc| {
             if !acc.snapshot.locked {
                 if let Some(txn) = acc.held_txns.remove(&txn_id) {
@@ -132,16 +138,21 @@ impl AccStore for InMemoryAccStore {
         });
     }
 
-    fn snapshots(&self) -> Vec<ClientAccountSnapshot> {
+    async fn snapshots(&self) -> Vec<ClientAccountSnapshot> {
         self.accs
             .iter()
-            .map(|(&client_id, acc)| ClientAccountSnapshot {
-                client_id,
-                available: acc.snapshot.available,
-                held: acc.snapshot.held,
-                locked: acc.snapshot.locked,
-                total: acc.snapshot.available + acc.snapshot.held,
+            .map(|entry| {
+                let client_id = *entry.key();
+                let acc = entry.value();
+                ClientAccountSnapshot {
+                    client_id,
+                    available: acc.snapshot.available,
+                    held: acc.snapshot.held,
+                    locked: acc.snapshot.locked,
+                    total: acc.snapshot.available + acc.snapshot.held,
+                }
             })
+            .sorted_unstable_by_key(|x| x.client_id)
             .collect()
     }
 }
@@ -230,8 +241,8 @@ mod tests {
         );
     }
 
-    #[test]
-    pub fn test_csv_feed() {
+    #[tokio::test]
+    pub async fn test_csv_feed() {
         let mut accs = InMemoryAccStore::default();
 
         let events_csv = vec![
@@ -250,7 +261,9 @@ mod tests {
         .into_iter()
         .join("\n");
         assert_eq!(
-            add_csv_events_to_accs(&mut accs, &events_csv).unwrap(),
+            add_csv_events_to_accs(&mut accs, &events_csv)
+                .await
+                .unwrap(),
             "client,available,held,total,locked
 1,200,0,200,false
 2,10,0,10,false"
@@ -261,7 +274,7 @@ mod tests {
 withdrawal,2,106,10
 deposit,1,107,100";
         assert_eq!(
-            add_csv_events_to_accs(&mut accs, events_csv).unwrap(),
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
             "client,available,held,total,locked
 1,300,0,300,false
 2,0,0,0,false"
@@ -276,7 +289,9 @@ deposit,1,107,100";
         .into_iter()
         .join("\n");
         assert_eq!(
-            add_csv_events_to_accs(&mut accs, &events_csv).unwrap(),
+            add_csv_events_to_accs(&mut accs, &events_csv)
+                .await
+                .unwrap(),
             "client,available,held,total,locked
 1,300,0,300,false
 2,-77.89,0,-77.89,true"
