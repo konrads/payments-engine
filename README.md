@@ -4,6 +4,8 @@
 
 Payment engine for mutable transactions, facilitating `deposits`, `withdrawals`, `disputes` with `resolve`/`chargeback` outcomes.
 
+**For async implementation, checkout [async branch](../async)**
+
 ## Design
 
 The design relies on a `AccStore` service, fronted by a trait of the mentioned name, and `InMemoryAccStore` implementation. The current implementation stores relevant information in-memory, but allows for extensions via new implementation, eg. stores that persist in disk/db/cache. Extensions might require changes to `AccStore` trait itself, to make it more async.
