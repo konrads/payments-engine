@@ -32,6 +32,7 @@ impl Deref for PositiveDecimal {
     }
 }
 
+/// Converts to PositiveDecimal if > 0
 impl TryInto<PositiveDecimal> for Decimal {
     type Error = anyhow::Error;
 

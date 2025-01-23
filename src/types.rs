@@ -1,6 +1,7 @@
 use crate::decimal::PositiveDecimal;
 use serde::{Deserialize, Deserializer};
 
+/// User friendly type aliases
 pub type ClientId = u16;
 pub type TxnId = u32;
 
