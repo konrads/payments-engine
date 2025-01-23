@@ -2,10 +2,9 @@ use crate::{
     decimal::PositiveDecimal,
     types::{ClientId, TxnEvent, TxnEventDetail, TxnId},
 };
-use fxhash::FxHashMap;
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde::{Serialize, Serializer};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use tracing::debug;
 
 pub trait AccStore {
@@ -192,8 +191,8 @@ pub struct ClientAccountSnapshot {
 
 #[derive(Default)]
 struct Account {
-    txns: FxHashMap<TxnId, Txn>,
-    held_txns: FxHashMap<TxnId, Txn>,
+    txns: HashMap<TxnId, Txn>,
+    held_txns: HashMap<TxnId, Txn>,
     snapshot: AccountSnapshot,
 }
 
