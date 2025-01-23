@@ -3,7 +3,7 @@ use csv::{ReaderBuilder, Trim, WriterBuilder};
 use serde::Serialize;
 use std::fs::File;
 
-// Read in CSV file, return a Result<Stream<Item=TxnEvent>
+// Read in CSV file, return an Iterator<Item=Result<TxnEvent>>
 pub fn read_csv_file(file: File) -> impl Iterator<Item = csv::Result<TxnEvent>> {
     let reader = ReaderBuilder::new()
         .has_headers(true)
