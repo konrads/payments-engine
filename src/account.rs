@@ -296,5 +296,38 @@ deposit,1,107,100";
 1,300,0,300,false
 2,-77.89,0,-77.89,true"
         );
+
+        // ascertain held is populated
+        let events_csv = "type,client,tx,amount
+deposit,1,201,50
+deposit,1,202,60
+dispute,1,201,
+dispute,1,202,";
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).unwrap(),
+            "client,available,held,total,locked
+1,300,110,410,false
+2,-77.89,0,-77.89,true"
+        );
+
+        // ascertain held is added to available on resolve
+        let events_csv = "type,client,tx,amount
+resolve,1,202,";
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).unwrap(),
+            "client,available,held,total,locked
+1,360,50,410,false
+2,-77.89,0,-77.89,true"
+        );
+
+        // ascertain held is depleted on chargeback
+        let events_csv = "type,client,tx,amount
+chargeback,1,201,";
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).unwrap(),
+            "client,available,held,total,locked
+1,360,0,360,true
+2,-77.89,0,-77.89,true"
+        );
     }
 }
