@@ -23,8 +23,13 @@ async fn main() -> anyhow::Result<()> {
     // Pluggable AccStore reference
     let acc_store: &mut dyn AccStore = &mut InMemoryAccStore::default();
 
-    let mut input_stream = read_csv_file(tokio::fs::File::open(input_filename).await?).await;
-    while let Some(event) = input_stream.next().await {
+    let input_stream = read_csv_file(tokio::fs::File::open(input_filename).await?).await;
+    let mut combined_input_stream = futures::stream::select_all(vec![
+        input_stream,
+        // input streams from other sources, eg. TCP
+    ]);
+
+    while let Some(event) = combined_input_stream.next().await {
         match event {
             Ok(event) => acc_store.add_event(event).await,
             Err(err) => warn!(?err, "Error processing event"), // Note: skipping errors
