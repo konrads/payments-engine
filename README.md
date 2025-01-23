@@ -4,7 +4,7 @@
 
 Payment engine for mutable transactions, facilitating `deposits`, `withdrawals`, `disputes` with `resolve`/`chargeback` outcomes.
 
-**For async implementation, checkout [async branch](../async)**
+**For async implementation, checkout [async branch](../async).**
 
 ## Design
 
