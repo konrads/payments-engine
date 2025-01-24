@@ -157,12 +157,14 @@ impl AccStore for InMemoryAccStore {
     }
 }
 
+#[derive(Debug)]
 pub enum TxnType {
     Deposit,
     Withdrawal,
 }
 
 /// Transaction maintained for disputes.
+#[derive(Debug)]
 pub struct Txn {
     txn_type: TxnType,
     amount: Decimal,
@@ -200,7 +202,7 @@ pub struct ClientAccountSnapshot {
     locked: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Account {
     txns: HashMap<TxnId, Txn>,
     held_txns: HashMap<TxnId, Txn>,
@@ -242,7 +244,146 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_csv_feed() {
+    async fn test_deposit() {
+        let mut accs = InMemoryAccStore::default();
+        let events_csv = "type,client,tx,amount
+deposit,1,101,100.456789";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,100.4568,0,100.4568,false"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_withdrawal() {
+        let mut accs = InMemoryAccStore::default();
+        let events_csv = "type,client,tx,amount
+deposit,1,101,100.456789
+withdrawal,1,102,100
+";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,0.4568,0,0.4568,false"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dispute_resolve() {
+        let mut accs = InMemoryAccStore::default();
+        let events_csv = "type,client,tx,amount
+deposit,1,101,100
+deposit,1,102,20";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,120,0,120,false"
+        );
+
+        let events_csv = "type,client,tx,amount
+dispute,1,102";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,120,0,120,false"
+        );
+
+        let events_csv = "type,client,tx,amount
+resolve,1,102,";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,120,0,120,false"
+        );
+    }
+
+    /// Tests dispute, chargeback, locking of non deposit transactions
+    #[tokio::test]
+    async fn test_dispute_chargeback() {
+        let mut accs = InMemoryAccStore::default();
+        let events_csv = "type,client,tx,amount
+deposit,1,101,100
+deposit,1,102,20";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,120,0,120,false"
+        );
+
+        let events_csv = "type,client,tx,amount
+dispute,1,102,";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,100,20,120,false"
+        );
+
+        let events_csv = "type,client,tx,amount
+chargeback,1,102,";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,100,0,100,true"
+        );
+
+        let events_csv = "type,client,tx,amount
+deposit,1,103,111
+withdrawal,1,103,11";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,211,0,211,true"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_multi_client() {
+        let mut accs = InMemoryAccStore::default();
+        let events_csv = "type,client,tx,amount
+deposit,1,101,1000
+deposit,2,102,100
+deposit,3,103,10
+withdrawal,1,201,100
+withdrawal,2,202,10
+withdrawal,3,203,1
+";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,900,0,900,false
+2,90,0,90,false
+3,9,0,9,false"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_invalid_records() {
+        let mut accs = InMemoryAccStore::default();
+        let events_csv = "type,client,tx,amount
+deposit,1,101,
+deposit,1,102,20,
+deposit,1,abc,def
+__BOGUS__,1,103,3";
+
+        assert!(add_csv_events_to_accs(&mut accs, events_csv)
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_large_csv_feed() {
         let mut accs = InMemoryAccStore::default();
 
         let events_csv = vec![
