@@ -118,7 +118,6 @@ impl AccStore for InMemoryAccStore {
 
     fn chargeback(&mut self, client_id: ClientId, txn_id: TxnId) {
         self.accs.entry(client_id).and_modify(|acc| {
-            tracing::error!(?acc, "chargeback");
             if !acc.snapshot.locked {
                 if let Some(txn) = acc.held_txns.remove(&txn_id) {
                     let amount = txn.type_adjusted_amount();
@@ -218,7 +217,7 @@ mod tests {
     use rust_decimal_macros::dec;
 
     #[test]
-    pub fn test_snapshot_4_decimal_places() {
+    fn test_snapshot_4_decimal_places() {
         let snapshot = ClientAccountSnapshot {
             client_id: 1,
             available: dec!(1.234549), // Note: more than 4 decimal places
@@ -234,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_deposit() {
+    fn test_deposit() {
         let mut accs = InMemoryAccStore::default();
         let events_csv = "type,client,tx,amount
 deposit,1,101,100.456789";
@@ -247,7 +246,7 @@ deposit,1,101,100.456789";
     }
 
     #[test]
-    pub fn test_withdrawal() {
+    fn test_withdrawal() {
         let mut accs = InMemoryAccStore::default();
         let events_csv = "type,client,tx,amount
 deposit,1,101,100.456789
@@ -262,7 +261,7 @@ withdrawal,1,102,100
     }
 
     #[test]
-    pub fn test_dispute_resolve() {
+    fn test_dispute_resolve() {
         let mut accs = InMemoryAccStore::default();
         let events_csv = "type,client,tx,amount
 deposit,1,101,100
@@ -295,7 +294,7 @@ resolve,1,102,";
 
     /// Tests dispute, chargeback, locking of non deposit transactions
     #[test]
-    pub fn test_dispute_chargeback() {
+    fn test_dispute_chargeback() {
         let mut accs = InMemoryAccStore::default();
         let events_csv = "type,client,tx,amount
 deposit,1,101,100
@@ -337,7 +336,7 @@ withdrawal,1,103,11";
     }
 
     #[test]
-    pub fn test_multi_client() {
+    fn test_multi_client() {
         let mut accs = InMemoryAccStore::default();
         let events_csv = "type,client,tx,amount
 deposit,1,101,1000
@@ -358,7 +357,7 @@ withdrawal,3,203,1
     }
 
     #[test]
-    pub fn test_invalid_records() {
+    fn test_invalid_records() {
         let mut accs = InMemoryAccStore::default();
         let events_csv = "type,client,tx,amount
 deposit,1,101,
@@ -372,7 +371,7 @@ __BOGUS__,1,103,3";
     }
 
     #[test]
-    pub fn test_large_csv_feed() {
+    fn test_large_csv_feed() {
         let mut accs = InMemoryAccStore::default();
 
         let events_csv = vec![
