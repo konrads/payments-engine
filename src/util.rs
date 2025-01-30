@@ -1,19 +1,19 @@
 use crate::types::TxnEvent;
 use csv::WriterBuilder;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::Stream;
 use serde::Serialize;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
 // Read in CSV file, return a Stream<Item=Result<TxnEvent>>
-pub async fn read_csv_file(file: tokio::fs::File) -> impl Stream<Item = anyhow::Result<TxnEvent>> {
+pub async fn read_csv_file(
+    file: tokio::fs::File,
+) -> impl Stream<Item = Result<TxnEvent, csv_async::Error>> {
     let reader = csv_async::AsyncReaderBuilder::new()
         .has_headers(true)
         .trim(csv_async::Trim::All)
         .create_deserializer(file.compat());
 
-    reader
-        .into_deserialize::<TxnEvent>()
-        .map(|result| result.map_err(anyhow::Error::from))
+    reader.into_deserialize::<TxnEvent>()
 }
 
 pub fn to_csv_string<T: Serialize>(values: &[T]) -> anyhow::Result<String> {
@@ -44,7 +44,13 @@ pub mod test {
         accs: &mut TS,
         contents: &str,
     ) -> anyhow::Result<String> {
-        for event in read_csv_contents(contents).filter_map(|e| e.ok()) {
+        for event in read_csv_contents(contents).filter_map(|e| {
+            e.map_err(|err| {
+                println!("failed to parse: {err:?}");
+                err
+            })
+            .ok()
+        }) {
             accs.add_event(event).await;
         }
         to_csv_string(&accs.snapshots().await)

@@ -74,7 +74,7 @@ impl AccStore for InMemoryAccStore {
                     acc.txns.insert(
                         txn_id,
                         Txn {
-                            txn_type: TxnType::Deposit,
+                            txn_type: TxnType::Withdrawal,
                             amount: *amount,
                         },
                     );
@@ -285,12 +285,12 @@ deposit,1,102,20";
         );
 
         let events_csv = "type,client,tx,amount
-dispute,1,102";
+dispute,1,102,";
 
         assert_eq!(
             add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
             "client,available,held,total,locked
-1,120,0,120,false"
+1,100,20,120,false"
         );
 
         let events_csv = "type,client,tx,amount
@@ -300,6 +300,39 @@ resolve,1,102,";
             add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
             "client,available,held,total,locked
 1,120,0,120,false"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dispute_resolve_withdrawal() {
+        let mut accs = InMemoryAccStore::default();
+        let events_csv = "type,client,tx,amount
+deposit,1,101,100
+withdrawal,1,102,20";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,80,0,80,false"
+        );
+
+        let events_csv = "type,client,tx,amount
+dispute,1,102,
+";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,100,-20,80,false"
+        );
+
+        let events_csv = "type,client,tx,amount
+resolve,1,102,";
+
+        assert_eq!(
+            add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
+            "client,available,held,total,locked
+1,80,0,80,false"
         );
     }
 
