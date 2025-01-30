@@ -40,7 +40,13 @@ pub mod test {
         accs: &mut TS,
         contents: &str,
     ) -> anyhow::Result<String> {
-        for event in read_csv_contents(contents).filter_map(|e| e.ok()) {
+        for event in read_csv_contents(contents).filter_map(|e| {
+            e.map_err(|err| {
+                println!("failed to parse: {err:?}");
+                err
+            })
+            .ok()
+        }) {
             accs.add_event(event);
         }
         to_csv_string(&accs.snapshots())
