@@ -317,8 +317,7 @@ withdrawal,1,102,20";
         );
 
         let events_csv = "type,client,tx,amount
-dispute,1,102,
-";
+dispute,1,102,";
 
         assert_eq!(
             add_csv_events_to_accs(&mut accs, events_csv).await.unwrap(),
