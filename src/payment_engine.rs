@@ -1,5 +1,5 @@
 use crate::{
-    account::{Account, ClientAccountSnapshot},
+    account::{Account, AccountSnapshot},
     decimal::PositiveDecimal,
     txn::{Txn, TxnType},
     types::{ClientId, TxnEvent, TxnEventDetail, TxnId},
@@ -27,7 +27,7 @@ pub trait PaymentEngine {
 
     fn chargeback(&mut self, client_id: ClientId, txn_id: TxnId) -> anyhow::Result<()>;
 
-    fn snapshots(&self) -> Vec<ClientAccountSnapshot>;
+    fn snapshots(&self) -> Vec<AccountSnapshot>;
 
     fn add_event(&mut self, event: TxnEvent) -> anyhow::Result<()> {
         match event.detail {
@@ -70,7 +70,7 @@ impl PaymentEngine for InMemoryPaymentEngine {
                 amount: *amount,
             },
         );
-        acc.snapshot.available += *amount;
+        acc.available += *amount;
         Ok(())
     }
 
@@ -83,8 +83,8 @@ impl PaymentEngine for InMemoryPaymentEngine {
         amount: PositiveDecimal,
     ) -> anyhow::Result<()> {
         if let Some(acc) = self.accs.get_mut(&client_id) {
-            if !acc.snapshot.locked {
-                if acc.snapshot.available >= *amount {
+            if !acc.locked {
+                if acc.available >= *amount {
                     acc.txns.insert(
                         txn_id,
                         Txn {
@@ -92,7 +92,7 @@ impl PaymentEngine for InMemoryPaymentEngine {
                             amount: *amount,
                         },
                     );
-                    acc.snapshot.available -= *amount;
+                    acc.available -= *amount;
                     Ok(())
                 } else {
                     anyhow::bail!("Cannot withdraw due to insufficient funds")
@@ -107,11 +107,11 @@ impl PaymentEngine for InMemoryPaymentEngine {
 
     fn dispute(&mut self, client_id: ClientId, txn_id: TxnId) -> anyhow::Result<()> {
         if let Some(acc) = self.accs.get_mut(&client_id) {
-            if !acc.snapshot.locked {
+            if !acc.locked {
                 if let Some(txn) = acc.txns.remove(&txn_id) {
                     let amount = txn.type_adjusted_amount();
-                    acc.snapshot.held += amount;
-                    acc.snapshot.available -= amount;
+                    acc.held += amount;
+                    acc.available -= amount;
                     acc.held_txns.insert(txn_id, txn);
                     Ok(())
                 } else {
@@ -127,11 +127,11 @@ impl PaymentEngine for InMemoryPaymentEngine {
 
     fn resolve(&mut self, client_id: ClientId, txn_id: TxnId) -> anyhow::Result<()> {
         if let Some(acc) = self.accs.get_mut(&client_id) {
-            if !acc.snapshot.locked {
+            if !acc.locked {
                 if let Some(txn) = acc.held_txns.remove(&txn_id) {
                     let amount = txn.type_adjusted_amount();
-                    acc.snapshot.held -= amount;
-                    acc.snapshot.available += amount;
+                    acc.held -= amount;
+                    acc.available += amount;
                     acc.txns.insert(txn_id, txn);
                     Ok(())
                 } else {
@@ -147,11 +147,11 @@ impl PaymentEngine for InMemoryPaymentEngine {
 
     fn chargeback(&mut self, client_id: ClientId, txn_id: TxnId) -> anyhow::Result<()> {
         if let Some(acc) = self.accs.get_mut(&client_id) {
-            if !acc.snapshot.locked {
+            if !acc.locked {
                 if let Some(txn) = acc.held_txns.remove(&txn_id) {
                     let amount = txn.type_adjusted_amount();
-                    acc.snapshot.held -= amount;
-                    acc.snapshot.locked = true;
+                    acc.held -= amount;
+                    acc.locked = true;
                     Ok(())
                 } else {
                     anyhow::bail!("Cannot chargeback non-existent transaction")
@@ -164,15 +164,15 @@ impl PaymentEngine for InMemoryPaymentEngine {
         }
     }
 
-    fn snapshots(&self) -> Vec<ClientAccountSnapshot> {
+    fn snapshots(&self) -> Vec<AccountSnapshot> {
         self.accs
             .iter()
-            .map(|(&client_id, acc)| ClientAccountSnapshot {
+            .map(|(&client_id, acc)| AccountSnapshot {
                 client_id,
-                available: acc.snapshot.available,
-                held: acc.snapshot.held,
-                locked: acc.snapshot.locked,
-                total: acc.snapshot.available + acc.snapshot.held,
+                available: acc.available,
+                held: acc.held,
+                locked: acc.locked,
+                total: acc.available + acc.held,
             })
             .collect()
     }

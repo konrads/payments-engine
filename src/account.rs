@@ -10,21 +10,14 @@ use std::collections::HashMap;
 pub struct Account {
     pub txns: HashMap<TxnId, Txn>,
     pub held_txns: HashMap<TxnId, Txn>,
-    pub snapshot: AccountSnapshot,
-}
-
-/// AccountSnapshot summarizes an account at a given point in time.
-/// Note: available and held can be -ve in case of dispute involving withdrawals
-#[derive(Serialize, Default, Debug, Eq, PartialEq, Clone)]
-pub struct AccountSnapshot {
     pub available: Decimal,
     pub held: Decimal,
     pub locked: bool,
 }
-
-/// Note: `available` | `held` | `total` can be -ve in case of dispute involving withdrawals
+/// AccountSnapshot summarizes an account at a given point in time.
+/// Note: available and held can be -ve in case of dispute involving withdrawals
 #[derive(Serialize, Debug, Eq, PartialEq)]
-pub struct ClientAccountSnapshot {
+pub struct AccountSnapshot {
     #[serde(rename = "client")]
     pub client_id: ClientId,
     #[serde(serialize_with = "serialize_decimal_4_places")]
@@ -55,7 +48,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_4_decimal_places() {
-        let snapshot = ClientAccountSnapshot {
+        let snapshot = AccountSnapshot {
             client_id: 1,
             available: dec!(1.234549), // Note: more than 4 decimal places
             held: dec!(0.0000499),     // Note: more than 4 decimal places
