@@ -1,4 +1,6 @@
 /target
+/.vscode
+
 # Editor created backups
 * copy*.*
 src/* copy*.*

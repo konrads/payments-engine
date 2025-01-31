@@ -8,9 +8,9 @@ Payment engine for mutable transactions, facilitating `deposits`, `withdrawals`,
 
 ## Design
 
-The design relies on a `AccStore` service, fronted by a trait of the mentioned name, and `InMemoryAccStore` implementation. The current implementation stores relevant information in-memory, but allows for extensions via new implementation, eg. stores that persist in disk/db/cache. Extensions might require changes to `AccStore` trait itself, to make it more async.
+The design relies on a `PaymentEngine ` service, fronted by a trait of the mentioned name, and `InMemoryPaymentEngine` implementation. The current implementation stores relevant information in-memory, but allows for extensions via new implementation, eg. stores that persist in disk/db/cache. Extensions might require changes to `PaymentEngine` trait itself, to make it more async.
 
-`InMemoryAccStore` accepts deserialized `TxnEvents`, persists transaction data and updates the client snapshots. Awareness of all transactions is required for disputes, but in-memory implementation is non scalable and subject to optimizations.
+`InMemoryPaymentEngine` accepts deserialized `TxnEvents`, persists transaction data and updates the client snapshots. Awareness of all transactions is required for disputes, but in-memory implementation is non scalable and subject to optimizations.
 
 The current approach reads transactions from a file in a sync way, via `Iterator`.
 
@@ -54,10 +54,11 @@ In general, warnings/errors print to stderr at `debug` level, but allow the proc
 
 ## Potential optimizations
 
-- switch to db/disk/cache implementation of `AccStore`, reducing the memory footprint
+- switch to db/disk/cache implementation of `PaymentEngine`, reducing the memory footprint
 - consider more compact data types, eg. u64 for amounts (after adjustment by 4 decimal places) or `repr(packed)` (ensuring no misalignment issues: https://doc.rust-lang.org/nomicon/other-reprs.html#reprpacked)
+- introduce more specific errors via [thiserror](https://crates.io/crates/thiserror)
 - ingest transactions async
   - convert `Iterator` to `Stream`. Consider `futures::stream::select_all()` for joining multiple streams into 1
-  - change `AccStore` methods to `async`
+  - change `PaymentEngine` methods to `async`
   - use `tokio` for runtime
   - consider usage of [dashmap](https://crates.io/crates/dashmap) for in-memory implementation

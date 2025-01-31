@@ -23,8 +23,9 @@ pub fn to_csv_string<T: Serialize>(values: &[T]) -> anyhow::Result<String> {
 // test helpers
 #[cfg(test)]
 pub mod test {
+    use crate::payment_engine::PaymentEngine;
+
     use super::*;
-    use crate::account::AccStore;
 
     pub fn read_csv_contents(
         contents: &str,
@@ -36,8 +37,8 @@ pub mod test {
         reader.into_deserialize::<TxnEvent>()
     }
 
-    pub fn add_csv_events_to_accs<TS: AccStore>(
-        accs: &mut TS,
+    pub fn add_csv_events_to_accs<PE: PaymentEngine>(
+        engine: &mut PE,
         contents: &str,
     ) -> anyhow::Result<String> {
         for event in read_csv_contents(contents).filter_map(|e| {
@@ -47,8 +48,10 @@ pub mod test {
             })
             .ok()
         }) {
-            accs.add_event(event);
+            if let Err(err) = engine.add_event(event) {
+                println!("failed to process: {err:?}");
+            };
         }
-        to_csv_string(&accs.snapshots())
+        to_csv_string(&engine.snapshots())
     }
 }
