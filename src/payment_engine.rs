@@ -27,7 +27,7 @@ pub trait PaymentEngine {
 
     fn chargeback(&mut self, client_id: ClientId, txn_id: TxnId) -> anyhow::Result<()>;
 
-    fn snapshots(&self) -> Vec<AccountSnapshot>;
+    fn snapshots(&self) -> anyhow::Result<Vec<AccountSnapshot>>;
 
     fn add_event(&mut self, event: TxnEvent) -> anyhow::Result<()> {
         match event.detail {
@@ -164,8 +164,9 @@ impl PaymentEngine for InMemoryPaymentEngine {
         }
     }
 
-    fn snapshots(&self) -> Vec<AccountSnapshot> {
-        self.accs
+    fn snapshots(&self) -> anyhow::Result<Vec<AccountSnapshot>> {
+        let snapshots = self
+            .accs
             .iter()
             .map(|(&client_id, acc)| AccountSnapshot {
                 client_id,
@@ -174,7 +175,8 @@ impl PaymentEngine for InMemoryPaymentEngine {
                 locked: acc.locked,
                 total: acc.available + acc.held,
             })
-            .collect()
+            .collect();
+        Ok(snapshots)
     }
 }
 

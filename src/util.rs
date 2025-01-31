@@ -51,6 +51,6 @@ pub mod test {
                 println!("failed to process: {err:?}");
             };
         }
-        to_csv_string(&engine.snapshots())
+        to_csv_string(&engine.snapshots()?)
     }
 }

@@ -32,7 +32,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    let snapshots = engine.snapshots();
+    let snapshots = engine.snapshots()?;
     println!("{}", to_csv_string(&snapshots)?);
     Ok(())
 }
