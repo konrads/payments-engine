@@ -1,6 +1,6 @@
 use futures::stream::StreamExt;
 use payments_engine::{
-    account::{AccStore, InMemoryAccStore},
+    payment_engine::{InMemoryPaymentEngine, PaymentEngine},
     util::{read_csv_file, to_csv_string},
 };
 use tracing::warn;
@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
     let input_filename = &args[1];
 
     // Pluggable AccStore reference
-    let acc_store: &mut dyn AccStore = &mut InMemoryAccStore::default();
+    let engine: &mut dyn PaymentEngine = &mut InMemoryPaymentEngine::default();
 
     let input_stream = read_csv_file(tokio::fs::File::open(input_filename).await?).await;
     let mut combined_input_stream = futures::stream::select_all(vec![
@@ -31,12 +31,16 @@ async fn main() -> anyhow::Result<()> {
 
     while let Some(event) = combined_input_stream.next().await {
         match event {
-            Ok(event) => acc_store.add_event(event).await,
-            Err(err) => warn!(?err, "Error processing event"), // Note: skipping errors
+            Ok(event) => {
+                if let Err(err) = engine.add_event(event).await {
+                    warn!(?err, "Error processing event") // Note: skipping errors
+                }
+            }
+            Err(err) => warn!(?err, "Error reading event"), // Note: skipping errors
         }
     }
 
-    let snapshots = acc_store.snapshots().await;
+    let snapshots = engine.snapshots().await?;
     println!("{}", to_csv_string(&snapshots)?);
     Ok(())
 }
