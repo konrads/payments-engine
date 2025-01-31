@@ -135,7 +135,7 @@ impl PaymentEngine for InMemoryPaymentEngine {
                     acc.txns.insert(txn_id, txn);
                     Ok(())
                 } else {
-                    anyhow::bail!("Cannot resolve non-existent transaction")
+                    anyhow::bail!("Cannot resolve non-disputed transaction")
                 }
             } else {
                 anyhow::bail!("Cannot resolve locked account")
@@ -154,7 +154,7 @@ impl PaymentEngine for InMemoryPaymentEngine {
                     acc.locked = true;
                     Ok(())
                 } else {
-                    anyhow::bail!("Cannot chargeback non-existent transaction")
+                    anyhow::bail!("Cannot chargeback non-disputed transaction")
                 }
             } else {
                 anyhow::bail!("Cannot chargeback locked account")
@@ -181,7 +181,7 @@ impl PaymentEngine for InMemoryPaymentEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::test::add_csv_events_to_accs;
+    use crate::util::test::add_csv_events_to_engine;
     use itertools::Itertools;
 
     #[test]
@@ -191,7 +191,7 @@ mod tests {
 deposit,1,101,100.456789";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,100.4568,0,100.4568,false"
         );
@@ -206,7 +206,7 @@ withdrawal,1,102,100
 ";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,0.4568,0,0.4568,false"
         );
@@ -220,7 +220,7 @@ deposit,1,101,100
 deposit,1,102,20";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,120,0,120,false"
         );
@@ -229,7 +229,7 @@ deposit,1,102,20";
 dispute,1,102,";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,100,20,120,false"
         );
@@ -238,7 +238,7 @@ dispute,1,102,";
 resolve,1,102,";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,120,0,120,false"
         );
@@ -252,7 +252,7 @@ deposit,1,101,100
 withdrawal,1,102,20";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,80,0,80,false"
         );
@@ -261,7 +261,7 @@ withdrawal,1,102,20";
 dispute,1,102,";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,100,-20,80,false"
         );
@@ -270,7 +270,7 @@ dispute,1,102,";
 resolve,1,102,";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,80,0,80,false"
         );
@@ -285,7 +285,7 @@ deposit,1,101,100
 deposit,1,102,20";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,120,0,120,false"
         );
@@ -294,7 +294,7 @@ deposit,1,102,20";
 dispute,1,102,";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,100,20,120,false"
         );
@@ -303,7 +303,7 @@ dispute,1,102,";
 chargeback,1,102,";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,100,0,100,true"
         );
@@ -313,7 +313,7 @@ deposit,1,103,111
 withdrawal,1,103,11";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,211,0,211,true"
         );
@@ -332,7 +332,7 @@ withdrawal,3,203,1
 ";
 
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,900,0,900,false
 2,90,0,90,false
@@ -349,7 +349,7 @@ deposit,1,102,20,
 deposit,1,abc,def
 __BOGUS__,1,103,3";
 
-        assert!(add_csv_events_to_accs(&mut engine, events_csv)
+        assert!(add_csv_events_to_engine(&mut engine, events_csv)
             .unwrap()
             .is_empty(),);
     }
@@ -374,7 +374,7 @@ __BOGUS__,1,103,3";
         .into_iter()
         .join("\n");
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, &events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, &events_csv).unwrap(),
             "client,available,held,total,locked
 1,200,0,200,false
 2,10,0,10,false"
@@ -385,7 +385,7 @@ __BOGUS__,1,103,3";
 withdrawal,2,106,10
 deposit,1,107,100";
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,300,0,300,false
 2,0,0,0,false"
@@ -400,7 +400,7 @@ deposit,1,107,100";
         .into_iter()
         .join("\n");
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, &events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, &events_csv).unwrap(),
             "client,available,held,total,locked
 1,300,0,300,false
 2,-77.89,0,-77.89,true"
@@ -413,7 +413,7 @@ deposit,1,202,60
 dispute,1,201,
 dispute,1,202,";
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,300,110,410,false
 2,-77.89,0,-77.89,true"
@@ -423,7 +423,7 @@ dispute,1,202,";
         let events_csv = "type,client,tx,amount
 resolve,1,202,";
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,360,50,410,false
 2,-77.89,0,-77.89,true"
@@ -433,7 +433,7 @@ resolve,1,202,";
         let events_csv = "type,client,tx,amount
 chargeback,1,201,";
         assert_eq!(
-            add_csv_events_to_accs(&mut engine, events_csv).unwrap(),
+            add_csv_events_to_engine(&mut engine, events_csv).unwrap(),
             "client,available,held,total,locked
 1,360,0,360,true
 2,-77.89,0,-77.89,true"

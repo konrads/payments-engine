@@ -23,9 +23,8 @@ pub fn to_csv_string<T: Serialize>(values: &[T]) -> anyhow::Result<String> {
 // test helpers
 #[cfg(test)]
 pub mod test {
-    use crate::payment_engine::PaymentEngine;
-
     use super::*;
+    use crate::payment_engine::PaymentEngine;
 
     pub fn read_csv_contents(
         contents: &str,
@@ -37,7 +36,7 @@ pub mod test {
         reader.into_deserialize::<TxnEvent>()
     }
 
-    pub fn add_csv_events_to_accs<PE: PaymentEngine>(
+    pub fn add_csv_events_to_engine<PE: PaymentEngine>(
         engine: &mut PE,
         contents: &str,
     ) -> anyhow::Result<String> {
